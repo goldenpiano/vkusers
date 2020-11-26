@@ -1,26 +1,37 @@
 #!/usr/bin/python3.4
-import sys
+
+from sys import argv
 import requests
 import jsonlines
-if (len(sys.argv) > 1) and (sys.argv[1].isdigit()):
-    groupid=sys.argv[1]
-else:
-    groupid=83388025
-print('Processing users from group',groupid)
-n_users=0
-offset=0
-users=[]
-while n_users<1000:
-    r=requests.get('https://api.vk.com/method/groups.getMembers',params={'group_id':groupid,'count':1000,'offset': offset})
-    response=r.json()
-    userlist=response['response']['users']
-    userstr=",".join(map(str, userlist))
-    r = requests.post("https://api.vk.com/method/users.get", data={'user_ids':userstr,'fields':'bdate','v':5.62})
-    response=r.json()
-    usersall=response['response']
-    users+=list(filter(lambda u: u.get("deactivated") is None, usersall))
-    n_users=len(users)
-    offset+=1001
-print('Saved ',len(users),' users to file vkusers.jsonl')
-with jsonlines.open('vkusers.jsonl', mode='w') as writer:
-    writer.write_all(users)
+
+def collect_vk(group, count=1000):
+    users = []
+    fname = 'vkusers.json'
+    offset = 0
+
+    while len(users) < count:
+        r = requests.get('https://api.vk.com/method/groups.getMembers', 
+                            params={'group_id': group, 'count' : 1000, 'offset': offset})
+        resp = r.json()
+        accounts = resp['response']['users']
+        s = ",".join(map(str, accounts))
+        r = requests.post("https://api.vk.com/method/users.get", 
+                            data={'user_ids': s, 'fields':'bdate', 'v':5.62})
+        resp = r.json()
+        info = resp['response']
+        users += list(filter(lambda u: u.get("deactivated") is None, info))
+        offset += 1001
+
+    print('Save %d users to %s file ' % (len(users), fname))
+    with jsonlines.open(fname, mode='w') as writer:
+        writer.write_all(users)
+
+def main():
+    group_id = 83388025  # default group
+    if len(argv) > 1 and argv[1].isdigit():
+        group_id = argv[1]
+    print('Processing users from group %d' % group_id)
+    collect_vk(group_id)
+
+if __name__ == '__main__':
+    main()
